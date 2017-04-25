@@ -3,7 +3,6 @@ from __future__ import print_function
 import json
 import logging
 import traceback
-from pathlib import Path
 from subprocess import getoutput
 
 import boto3
@@ -24,27 +23,29 @@ AWSCLI_BINARY_DIR = "/tmp/"
 
 
 def cl(command):
-    logger.info(getoutput(command))
+    log_context = f"Running command '{command}'\n"
+    output = getoutput(command)
+    logging.info(log_context + output)
+    return output
 
 
 def set_up_hugo():
-    # Pull hugo binary from s3
     resource_bucket.download_file(HUGO_BINARY, HUGO_BINARY_PATH)
-
-    # Make the binary executable
     make_executable(HUGO_BINARY_PATH)
 
 
 def set_up_git():
-    # Pull git tarball from s3
     resource_bucket.download_file(GIT_TARBALL, GIT_TARBALL_DIRECTORY)
-
-    # Untar the tarball
     untar(GIT_TARBALL_DIRECTORY, GIT_DIRECTORY)
 
 
+def set_up_awscli():
+    resource_bucket.download_file(AWSCLI_ZIP, AWSCLI_ZIP_PATH)
+    cl(f"unzip {AWSCLI_ZIP_PATH} -d {AWSCLI_BINARY_DIR}")
+
+
 def make_executable(path_to_binary):
-    cl(f"chmod -v 755 {path_to_binary}")
+    cl(f"chmod -v +x {path_to_binary}")
 
 
 def untar(tarball, dest_dir):
@@ -62,11 +63,6 @@ def respond(err=None, res=None):
     }
 
 
-def upload_dir_to_s3(directory):
-    for file_path in Path(directory).glob('**/*.*'):
-        site_bucket.upload_file(file_path.__str__(), file_path.relative_to(directory).__str__())
-
-
 def lambda_handler(event, context):
     # logger.info("Received event: " + json.dumps(event, indent=2))
     try:
@@ -77,8 +73,7 @@ def lambda_handler(event, context):
         cl(f"hugo -v --source {SOURCE_TMP} --destination {SOURCE_DEST}")
 
         # Sync to s3
-        site_bucket.objects.all().delete()
-        upload_dir_to_s3(SOURCE_DEST)
+        cl(f"aws s3 sync {SOURCE_DEST} s3://{SITE_BUCKET} --delete")
 
         return respond(err=None, res="Success")
 
@@ -96,8 +91,8 @@ logger.info('Loading function')
 # Set up the s3 client and buckets
 s3 = boto3.resource('s3')
 resource_bucket = s3.Bucket(RESOURCE_BUCKET)
-site_bucket = s3.Bucket(SITE_BUCKET)
 
-# Set up hugo and git
+# Set up needed binaries
 set_up_hugo()
 set_up_git()
+set_up_awscli()
