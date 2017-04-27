@@ -7,19 +7,27 @@ from subprocess import getoutput
 
 import boto3
 
-SOURCE_TMP = "/tmp/source/"
-SOURCE_DEST = "/tmp/source/public/"
 GITHUB_REPO_URL = "https://github.com/pjgranahan/pjgranahan.com.git"
 RESOURCE_BUCKET = "pjgranahan-com-hugo-build-lambda-resources"
 SITE_BUCKET = "pjgranahan-com-static-site-bucket"
+
+SOURCE_TMP = "/tmp/source/"
+SOURCE_DEST = "/tmp/source/public/"
+
 GIT_TARBALL = "git-2.4.3.tar"
 GIT_TARBALL_DIRECTORY = "/tmp/git.tar"
 GIT_DIRECTORY = "/tmp/git/"
+
 HUGO_BINARY = "hugo_0.20.2_linux_amd64"
 HUGO_BINARY_PATH = "/tmp/hugo"
+
 AWSCLI_ZIP = "awscli.zip"
 AWSCLI_ZIP_PATH = "/tmp/awscli.zip"
-AWSCLI_BINARY_DIR = "/tmp/"
+AWSCLI_BINARY_DIR = "/tmp/awscli/"
+
+PYGMENTS_ZIP = "pygments.zip"
+PYGMENTS_ZIP_PATH = "/tmp/pygments.zip"
+PYGMENTS_BINARY_DIR = "/tmp/pygments/"
 
 
 def cl(command):
@@ -42,6 +50,11 @@ def set_up_git():
 def set_up_awscli():
     resource_bucket.download_file(AWSCLI_ZIP, AWSCLI_ZIP_PATH)
     cl(f"unzip {AWSCLI_ZIP_PATH} -d {AWSCLI_BINARY_DIR}")
+
+
+def set_up_pygments():
+    resource_bucket.download_file(PYGMENTS_ZIP, PYGMENTS_ZIP_PATH)
+    cl(f"unzip {PYGMENTS_ZIP_PATH} -d {PYGMENTS_BINARY_DIR}")
 
 
 def make_executable(path_to_binary):
@@ -73,7 +86,8 @@ def lambda_handler(event, context):
         cl(f"hugo -v --source {SOURCE_TMP} --destination {SOURCE_DEST}")
 
         # Sync to s3
-        cl(f"aws s3 sync {SOURCE_DEST} s3://{SITE_BUCKET} --delete")
+        cl(f"aws s3 sync {SOURCE_DEST} s3://{SITE_BUCKET} "
+           f"--delete --cache-control max-age=10 --storage-class REDUCED_REDUNDANCY")
 
         return respond(err=None, res="Success")
 
@@ -96,3 +110,4 @@ resource_bucket = s3.Bucket(RESOURCE_BUCKET)
 set_up_hugo()
 set_up_git()
 set_up_awscli()
+set_up_pygments()
