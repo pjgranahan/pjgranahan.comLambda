@@ -1,5 +1,5 @@
 # pjgranahan.com Lambda
-An AWS Lambda Python 3.6 function that, when triggered by a GitHub push webhook, builds [my website](https://github.com/pjgranahan/pjgranahan.com) and deploys it at [pjgranahan.com](https://www.pjgranahan.com).
+An AWS Lambda Python 3.6 function that, when triggered by a GitHub push webhook, builds [my website](https://github.com/pjgranahan/pjgranahan.com) and uploads it to an S3 bucket. It is ultimately served at [pjgranahan.com](https://www.pjgranahan.com).
 
 ## Initialization
 AWS Lambda functions can perform some initialization that is then shared between Lambda invocations that are run while the function is still "hot" ([read more](https://aws.amazon.com/blogs/compute/container-reuse-in-lambda/)) .
