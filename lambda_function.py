@@ -11,12 +11,12 @@ GITHUB_REPO_URL = "https://github.com/pjgranahan/pjgranahan.com.git"
 RESOURCE_BUCKET = "pjgranahan-com-hugo-build-lambda-resources"
 SITE_BUCKET = "pjgranahan-com-static-site-bucket"
 
-SOURCE_TMP = "/tmp/source/"
-SOURCE_DEST = "/tmp/source/public/"
+SITE_SOURCE_DIR = "/tmp/source/"
+SITE_BUILD_DIR = "/tmp/source/public/"
 
-GIT_TARBALL = "git-2.4.3.tar"
-GIT_TARBALL_DIRECTORY = "/tmp/git.tar"
-GIT_DIRECTORY = "/tmp/git/"
+GIT_TAR = "git-2.4.3.tar"
+GIT_TAR_DIR = "/tmp/git.tar"
+GIT_DIR = "/tmp/git/"  # Actual binary 'git' is at /tmp/git/usr/bin/git
 
 HUGO_BINARY = "hugo_0.20.2_linux_amd64"
 HUGO_BINARY_PATH = "/tmp/hugo"
@@ -43,18 +43,14 @@ def set_up_hugo():
 
 
 def set_up_git():
-    resource_bucket.download_file(GIT_TARBALL, GIT_TARBALL_DIRECTORY)
-    untar(GIT_TARBALL_DIRECTORY, GIT_DIRECTORY)
+    resource_bucket.download_file(GIT_TAR, GIT_TAR_DIR)
+    untar(GIT_TAR_DIR, GIT_DIR)
 
 
-def set_up_awscli():
-    resource_bucket.download_file(AWSCLI_ZIP, AWSCLI_ZIP_PATH)
-    cl(f"unzip {AWSCLI_ZIP_PATH} -d {AWSCLI_BINARY_DIR}")
-
-
-def set_up_pygments():
-    resource_bucket.download_file(PYGMENTS_ZIP, PYGMENTS_ZIP_PATH)
-    cl(f"unzip {PYGMENTS_ZIP_PATH} -d {PYGMENTS_BINARY_DIR}")
+def set_up_python_package(zip_name, zip_download_path, unzipped_binary_dir):
+    """Sets up Python packages prepared using the alestic approach: https://alestic.com/2016/11/aws-lambda-awscli/"""
+    resource_bucket.download_file(zip_name, zip_download_path)
+    cl(f"unzip {zip_download_path} -d {unzipped_binary_dir}")
 
 
 def make_executable(path_to_binary):
@@ -77,16 +73,16 @@ def respond(err=None, res=None):
 
 
 def lambda_handler(event, context):
-    # logger.info("Received event: " + json.dumps(event, indent=2))
+    logger.info("Received event: " + json.dumps(event, indent=2))
     try:
-        # Clone source
-        cl(f"git clone -v {GITHUB_REPO_URL} {SOURCE_TMP}")
+        # Update source
+        cl(f"( cd {SITE_SOURCE_DIR}; git pull -v )")
 
         # Build site
-        cl(f"hugo -v --source {SOURCE_TMP} --destination {SOURCE_DEST}")
+        cl(f"hugo -v --source {SITE_SOURCE_DIR} --destination {SITE_BUILD_DIR}")
 
         # Sync to s3
-        cl(f"aws s3 sync {SOURCE_DEST} s3://{SITE_BUCKET} "
+        cl(f"aws s3 sync {SITE_BUILD_DIR} s3://{SITE_BUCKET} "
            f"--delete --cache-control max-age=10 --storage-class REDUCED_REDUNDANCY")
 
         return respond(err=None, res="Success")
@@ -109,5 +105,8 @@ resource_bucket = s3.Bucket(RESOURCE_BUCKET)
 # Set up needed binaries
 set_up_hugo()
 set_up_git()
-set_up_awscli()
-set_up_pygments()
+set_up_python_package(AWSCLI_ZIP, AWSCLI_ZIP_PATH, AWSCLI_BINARY_DIR)
+set_up_python_package(PYGMENTS_ZIP, PYGMENTS_ZIP_PATH, PYGMENTS_BINARY_DIR)
+
+# Clone source
+cl(f"git clone -v {GITHUB_REPO_URL} {SITE_SOURCE_DIR}")
