@@ -11,6 +11,7 @@ This function uses this opportunity to download and set up the following program
  
 For AWS CLI and Pygments, I followed [Eric Hammond's directions](https://alestic.com/2016/11/aws-lambda-awscli/) to package them into ZIPs.
 Hugo, Git, AWS CLI, and Pygments are all stored in an S3 bucket and pulled down to the Lambda function during initialization.
+They are also placed on the $PATH, so Hugo can run with [GitInfo](https://gohugo.io/extras/gitinfo/) and [syntax highlighting](https://gohugo.io/extras/highlighting/)!
 
 ## Security
 I host this function using AWS API Gateway at the endpoint https://api.pjgranahan.com/site/build. 
