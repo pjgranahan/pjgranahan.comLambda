@@ -13,6 +13,7 @@ import boto3
 GITHUB_REPO_URL = "https://github.com/pjgranahan/pjgranahan.com.git"
 RESOURCE_BUCKET = "pjgranahan-com-hugo-build-lambda-resources"
 SITE_BUCKET = "pjgranahan-com-static-site-bucket"
+CLOUDFRONT_DISTRIBUTION_ID = "EAI80N5P7ES1R"
 
 SITE_SOURCE_DIR = "/tmp/source/"
 SITE_BUILD_DIR = "/tmp/source/public/"
@@ -116,8 +117,14 @@ def lambda_handler(event, context):
         cl(f"hugo -v --source {SITE_SOURCE_DIR} --destination {SITE_BUILD_DIR}")
 
         # Sync to s3
-        cl(f"aws s3 sync {SITE_BUILD_DIR} s3://{SITE_BUCKET} "
-           f"--delete --cache-control max-age=10 --storage-class REDUCED_REDUNDANCY")
+        cl(f"aws s3 sync {SITE_BUILD_DIR} s3://{SITE_BUCKET} --delete --cache-control max-age=15 --storage-class REDUCED_REDUNDANCY --exclude assets/*")
+        cl(f"aws s3 sync {SITE_BUILD_DIR}assets/ s3://{SITE_BUCKET}/assets/ --delete --cache-control max-age=604800 --storage-class REDUCED_REDUNDANCY")
+
+        # Invalidate CloudFront's cache
+        cloudfront.create_invalidation(
+            DistributionId=CLOUDFRONT_DISTRIBUTION_ID,
+            InvalidationBatch={'Paths': {'Quantity': 1, 'Items': ['/']}, 'CallerReference': context.aws_request_id}
+        )
 
         return respond(err=None, res="Success")
 
@@ -132,9 +139,10 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.info('Loading function')
 
-# Set up the s3 client and buckets
+# Set up boto3
 s3 = boto3.resource('s3')
 resource_bucket = s3.Bucket(RESOURCE_BUCKET)
+cloudfront = boto3.client('cloudfront')
 
 # Set up needed binaries
 set_up_hugo()
