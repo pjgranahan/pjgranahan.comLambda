@@ -38,7 +38,7 @@ PYGMENTS_BINARY_DIR = "/tmp/pygments/"
 def cl(command):
     log_context = f"Running command '{command}'\n"
     output = getoutput(command)
-    logging.info(log_context + output)
+    logger.info(log_context + output)
     return output
 
 
@@ -117,14 +117,15 @@ def lambda_handler(event, context):
         cl(f"hugo -v --source {SITE_SOURCE_DIR} --destination {SITE_BUILD_DIR}")
 
         # Sync to s3
-        cl(f"aws s3 sync {SITE_BUILD_DIR} s3://{SITE_BUCKET} --delete --cache-control max-age=15 --storage-class REDUCED_REDUNDANCY --exclude assets/*")
-        cl(f"aws s3 sync {SITE_BUILD_DIR}assets/ s3://{SITE_BUCKET}/assets/ --delete --cache-control max-age=604800 --storage-class REDUCED_REDUNDANCY")
+        cl(f"aws s3 sync {SITE_BUILD_DIR} s3://{SITE_BUCKET} --delete --cache-control max-age=15 --storage-class=REDUCED_REDUNDANCY --exclude=assets/*")
+        cl(f"aws s3 sync {SITE_BUILD_DIR}assets/ s3://{SITE_BUCKET}/assets/ --delete --cache-control max-age=604800 --storage-class=REDUCED_REDUNDANCY")
 
         # Invalidate CloudFront's cache
-        cloudfront.create_invalidation(
+        response = cloudfront.create_invalidation(
             DistributionId=CLOUDFRONT_DISTRIBUTION_ID,
             InvalidationBatch={'Paths': {'Quantity': 1, 'Items': ['/']}, 'CallerReference': context.aws_request_id}
         )
+        logger.info(response)
 
         return respond(err=None, res="Success")
 
