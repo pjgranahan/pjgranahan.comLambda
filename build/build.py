@@ -4,8 +4,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import traceback
-from os import environ
+from base64 import b64decode
 from subprocess import getoutput
 
 import boto3
@@ -91,17 +92,21 @@ def respond(err=None, res=None):
     }
 
 
+class VerificationError(Exception):
+    pass
+
+
 def verify_webhook(payload_body, header_signature):
     """
     Verifies a webhook is from Github by comparing secrets. See https://developer.github.com/webhooks/securing/
-    Assumes that the following environment variables are set:
+    Assumes that the following environment variables are set and decrypted:
         GITHUB_SECRET={the same secret token you used when you setup your Github webhook}
     """
-    signature = "sha1=" + hmac.new(str.encode(environ['GITHUB_SECRET']),
+    signature = "sha1=" + hmac.new(DECRYPTED_GITHUB_SECRET,
                                    msg=str.encode(payload_body),
                                    digestmod=hashlib.sha1).hexdigest()
     if not hmac.compare_digest(signature, header_signature):
-        raise PermissionError
+        raise VerificationError
 
 
 def lambda_handler(event, context):
@@ -139,6 +144,10 @@ def lambda_handler(event, context):
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.info('Loading function')
+
+# Decrypt Lambda environment variables
+ENCRYPTED_GITHUB_SECRET = os.environ['GITHUB_SECRET']
+DECRYPTED_GITHUB_SECRET = boto3.client('kms').decrypt(CiphertextBlob=b64decode(ENCRYPTED_GITHUB_SECRET))['Plaintext']
 
 # Set up boto3
 s3 = boto3.resource('s3')
